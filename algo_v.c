@@ -32,6 +32,26 @@ void init_data(App *data){
 	
 };
 
+/*
+	THis stupid shuffeling code coppie from internet.
+
+	Current implemention: generate data in a loop
+		shuffel data using another loop;
+		o(n)=2n;
+
+	TO DO: to implment shuffeling code inside generate_data() 
+	sunch that in a single loop a random distrubeted data is generated.
+		o(n)=n;
+*/
+void shuffel_data(App *app){
+    for (int i = app->size; i > 1; i--) {
+        int r = rand()%i;
+        Data t = app->data[i - 1];
+        app->data[i - 1]=app->data[r];
+        app->data[r] = t;
+    }
+}
+
 void generate_data(App *data,int start,int end,int interval){
 	if(data->data!=NULL)free(data->data);data->data=NULL;
 	int size=(end-start)/interval;
@@ -50,6 +70,7 @@ void generate_data(App *data,int start,int end,int interval){
 		memcpy(data->data[i].color,COLORS[__DEACTIVE__],4);
 		start+=interval;
 	};
+	shuffel_data(data);
 	printf("[+]Data initilization finished\n");
 };
 
