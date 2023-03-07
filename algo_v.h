@@ -11,6 +11,8 @@
 
 #define DATA_HEIGHT	20 //fot the smallest unit of data;
 #define DATA_WIDTH	10
+#define FREQUENCY_START 200
+#define FREQUENCY_END	500
 
 #define DEFAULT_ANIMATION_SPEED 10
 #define DEFAULT_SCREEN_HEIGHT	400 
@@ -42,6 +44,7 @@ typedef struct
 	int value;
 	uint8_t color[4];
 	void *parent;
+	float frequency;
 } Data;
 
 typedef struct 
@@ -51,6 +54,14 @@ typedef struct
 	float zoom;	
 } Camera;
 
+typedef struct 
+{
+	uint64_t samples_played;
+	SDL_AudioDeviceID id;
+	bool playing;
+	float frequency;
+} AudioInfo;
+
 typedef struct{
 	Data *data;
 	int size;
@@ -59,6 +70,7 @@ typedef struct{
 	float animation_sleep;
 	SDL_Window* window;
 	SDL_Renderer* renderer;
+	AudioInfo audio;
 	Camera camera;
 } App;
 
@@ -82,6 +94,7 @@ void set_data(App *data,int pos,int value);
 
 void* algo_function(void *ptr);
 void draw_data(App *data,void *func);
+void audio_callback(void* userdata, uint8_t* stream, int len);
 
 void set_state(Data *data,__COLOR__ color);
 void swap_with_visulization(Data *data1,Data *data2);

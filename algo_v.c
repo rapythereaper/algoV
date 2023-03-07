@@ -6,6 +6,33 @@
 
 void init_data(App *data){
 	data->data=NULL;
+
+	/* init Audio */
+	data->audio.samples_played = 0;
+	if(SDL_Init(SDL_INIT_AUDIO) < 0){
+		fprintf(stderr, "Error initializing SDL. SDL_Error: %s\n", SDL_GetError());
+		return ;
+	}
+	SDL_AudioSpec audio_spec_want, audio_spec;
+	SDL_memset(&audio_spec_want, 0, sizeof(audio_spec_want));
+
+	audio_spec_want.freq     = 44100;
+	audio_spec_want.format   = AUDIO_F32;
+	audio_spec_want.channels = 2;
+	audio_spec_want.samples  = 512;
+	audio_spec_want.callback = audio_callback;
+	audio_spec_want.userdata = (void*)&data->audio;
+
+	SDL_AudioDeviceID audio_device_id = SDL_OpenAudioDevice(
+		NULL, 0,
+		&audio_spec_want, &audio_spec,
+		SDL_AUDIO_ALLOW_FORMAT_CHANGE
+    );
+	data->audio.id=audio_device_id;
+	/* Satart playing audio i.e execute callack audio*/
+	//SDL_PauseAudioDevice(audio_device_id, 0);
+
+	/* init Video */
 	SDL_Window* window = NULL;
 	//SDL_Surface* screenSurface = NULL;
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -29,7 +56,6 @@ void init_data(App *data){
 	SDL_RenderClear(data->renderer);
 	SDL_RenderPresent(data->renderer);
 	SDL_Delay(5000);
-	
 };
 
 /*
@@ -63,9 +89,11 @@ void generate_data(App *data,int start,int end,int interval){
 	data->size=size;
 	data->data=malloc(size*sizeof(Data));
 	printf("[*]Intitlizing data...\n");
+	float frequency_interval= (FREQUENCY_END-FREQUENCY_START)/size;
 	for(int i=0;i<size;i++){
-		data->data[i].value=size-start;
+		data->data[i].value=start;
 		data->data[i].parent=data;
+		data->data[i].frequency=FREQUENCY_START+i*frequency_interval;
 		//data->data[i].color={STATIC_COLOR};
 		memcpy(data->data[i].color,COLORS[__DEACTIVE__],4);
 		start+=interval;
@@ -76,6 +104,7 @@ void generate_data(App *data,int start,int end,int interval){
 
 void free_data(App *data){
 	if(data->data!=NULL)free(data->data);
+	SDL_CloseAudioDevice(data->audio.id);
 	SDL_DestroyWindow(data->window);
   	SDL_Quit();
 };
@@ -93,10 +122,21 @@ void set_data(App *data,int pos,int value){
 	data->data[pos].value=value;
 };
 
+/*fucntion that wraps the call back algorithm function provided as argement in draw_data()
+	It Executes in seperate thread;	
+*/
 void* algo_function(void *ptr){
 	printf("[*]Algorith started\n");
 	AlgoThreadPtr *args=(AlgoThreadPtr*)ptr;
+	/*Start playing the audio*/
+	args->app->audio.frequency=0;
+	SDL_PauseAudioDevice(args->app->audio.id, 0);
+
+	/*Execute the callback algorithm function*/
 	args->func(args->app->data,args->app->size);
+
+	/*Stop audio playing*/
+	SDL_PauseAudioDevice(args->app->audio.id, 1);
 	printf("[+]Algorith finished computing\n");
 	return NULL;
 
@@ -132,6 +172,10 @@ void draw_data(App *data,void *func){
 						break;
 					case SDLK_DOWN:
 						data->camera.y+=CAMERA_MOVEMENT_SPEED;
+						break;
+					case SDLK_p:
+						data->audio.playing=(!data->audio.playing);
+						SDL_PauseAudioDevice(data->audio.id,data->audio.playing);
 						break;
 					case SDLK_PLUS:
 						if(ctrl_pressd){
@@ -186,8 +230,36 @@ void draw_data(App *data,void *func){
 	return;
 };
 
+/*Audi callback function used in init_data() as a call back functio to play data sound*/
+void audio_callback(void* userdata, uint8_t* stream, int len){
+	AudioInfo *audio_info=(AudioInfo*)userdata;
+
+	uint64_t *samples_played = &audio_info->samples_played;
+    float* fstream = (float*)(stream);
+    static const float volume = 0.2;
+    float frequency = audio_info->frequency;
+    
+    for(int sid = 0; sid < (len / 8); sid++)
+    {
+        double time = (*samples_played + sid) / 44100.0;
+
+        fstream[2 * sid + 0] = volume * sin(frequency * 2.0 * M_PI * time); /* L */
+        fstream[2 * sid + 1] = volume * sin(frequency * 2.0 * M_PI * time); /* R */
+    }
+    *samples_played += (len / 8);
+};
+
+
+
+
+
+
 void set_state(Data *data,__COLOR__ color){
 	memcpy(data->color,COLORS[color] ,4);
+	if(color==__ACTIVE__){
+		((App*)data->parent)->audio.samples_played=0;
+		((App*)data->parent)->audio.frequency=data->frequency;
+	}
 	SDL_Delay(((App*)data->parent)->animation_sleep);
 }
 void swap_with_visulization(Data *data1,Data *data2){
